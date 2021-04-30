@@ -19,17 +19,17 @@ def geef_alle_namen(ontmoetingen):
 def heeft_contact_gehad_met(ontmoetingen, persoon_X, persoon_Y, afstand=-1):
     if persoon_X == persoon_Y:
         return True
-    if not is_lid_van_populatie(ontmoetingen, persoon_X) or not is_lid_van_populatie(ontmoetingen, persoon_Y):
+    if not is_lid_van_populatie(ontmoetingen, persoon_X) or not is_lid_van_populatie(ontmoetingen, persoon_Y) or persoon_Y not in ontmoetingen[persoon_X]:
         return False
-    return (ontmoetingen[persoon_X][persoon_Y]<=afstand and ontmoetingen[persoon_X][persoon_Y]!=-1) if afstand!=-1 else ontmoetingen[persoon_X][persoon_Y]!=-1
+    return ontmoetingen[persoon_X][persoon_Y]<=afstand if afstand!=-1 else True
 
 def kan_iedereen_rechtstreeks_besmetten(ontmoetingen, geinfecteerd_by_start):
-    return set(geinfecteerd_by_start).union(*[set(geef_rechtstreekse_contacten(ontmoetingen, i)) for i in set(geinfecteerd_by_start) & geef_alle_namen(ontmoetingen)]) == geef_alle_namen(ontmoetingen)
+    return set(geinfecteerd_by_start).union(*[set(geef_rechtstreekse_contacten(ontmoetingen, i)) for i in set(geinfecteerd_by_start) & geef_alle_namen(ontmoetingen)]) == (geef_alle_namen(ontmoetingen) | set(geinfecteerd_by_start))
 
 def hops_nodig_voor_geinfecteerde_populatie(ontmoetingen, geinfecteerd):
     hops = 0
-    while hops <= len(geef_alle_namen(ontmoetingen)):
-        if (geinfecteerd:=set(geinfecteerd).union(*[set(geef_rechtstreekse_contacten(ontmoetingen, i)) for i in set(geinfecteerd) & geef_alle_namen(ontmoetingen)])) == geef_alle_namen(ontmoetingen):
+    while geinfecteerd != (geinfecteerd:=set(geinfecteerd).union(*[set(geef_rechtstreekse_contacten(ontmoetingen, i)) for i in set(geinfecteerd) & geef_alle_namen(ontmoetingen)])):
+        if geinfecteerd == geef_alle_namen(ontmoetingen):
             return hops
         hops += 1
     return -1
@@ -44,17 +44,16 @@ def lengteUpdater(ontmoetingen, personen):
             pad = pad + [persoon_X]
             if persoon_X == persoon_Y:
                 return pad
-            kortste_pad = None
-            for buur in geef_rechtstreekse_contacten(ontmoetingen, persoon_X):
-                if buur not in pad and (lengte==-1 or len(pad)<(lengte-1)):
-                    nieuw_pad = kortste_pad_vinder(ontmoetingen, buur, persoon_Y, pad, lengte)
-                    if nieuw_pad and (not kortste_pad or len(nieuw_pad) < len(kortste_pad)):
-                        kortste_pad = nieuw_pad
-                        lengte = len(nieuw_pad)
+            kortste_pad = []
+            for i in geef_rechtstreekse_contacten(ontmoetingen, persoon_X):
+                if i not in pad and (lengte==-1 or len(pad)<(lengte-1)):
+                    nieuw_pad = kortste_pad_vinder(ontmoetingen, i, persoon_Y, pad, lengte)
+                    if nieuw_pad!=[] and (kortste_pad==[] or len(nieuw_pad) < len(kortste_pad)):
+                        kortste_pad, lengte = nieuw_pad, len(nieuw_pad)
             return kortste_pad
-        if (kortste_pad:=kortste_pad_vinder(ontmoetingen, persoon_X, persoon_Y)) == None:
-            return -1
-        return len(kortste_pad)-2
+        kortste_pad = kortste_pad_vinder(ontmoetingen, persoon_X, persoon_Y)
+        return False if kortste_pad == [] else len(kortste_pad)-2
     for i in personen:
         for j in (geef_alle_namen(ontmoetingen) - set(personen)):
-            ontmoetingen[i][j] = ontmoetingen[j][i] = kortste_lengte(ontmoetingen, i, j)
+            if (x:=kortste_lengte(ontmoetingen, i, j)) != False:
+                ontmoetingen[i][j] = ontmoetingen[j][i] = x
