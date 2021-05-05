@@ -1,59 +1,38 @@
-def initialiseer_contacttracing():
-    return {}
+import networkx as nx
+import matplotlib.pyplot as plt
+from backend import initialiseer_contacttracing, registreer_ontmoeting, geef_alle_namen, geef_rechtstreekse_contacten, hops_nodig_voor_geinfecteerde_populatie
 
-def registreer_ontmoeting(ontmoetingen, personen):
-    for i in personen:
-        ontmoetingen.setdefault(i, {})
-        ontmoetingen[i] |= {j:0 for j in set(personen) - {i}}
-    lengteUpdater(ontmoetingen, personen)
+def main():
+    contact_tracing_datastructuur = initialiseer_contacttracing()
+    G = nx.Graph()
 
-def geef_rechtstreekse_contacten(ontmoetingen, persoon_X):
-    return [i for i in ontmoetingen[persoon_X] if ontmoetingen[persoon_X][i] == 0]
+    registreer_ontmoeting(contact_tracing_datastructuur,("Pieter","Koen"))
+    registreer_ontmoeting(contact_tracing_datastructuur,("Bart","Koen", "Kim"))
+    registreer_ontmoeting(contact_tracing_datastructuur,("Pieter","Tom"))
+    registreer_ontmoeting(contact_tracing_datastructuur,("Bart", "Yana"))
+    registreer_ontmoeting(contact_tracing_datastructuur,("Yana","Wouter"))
+    registreer_ontmoeting(contact_tracing_datastructuur,("Wouter", "Bert"))
+    registreer_ontmoeting(contact_tracing_datastructuur,("Koen", "Koen"))
 
-def is_lid_van_populatie(ontmoetingen, persoon):
-    return persoon in geef_alle_namen(ontmoetingen)
+    for i in geef_alle_namen(contact_tracing_datastructuur):
+        G.add_node(i)
+        for j in geef_rechtstreekse_contacten(contact_tracing_datastructuur, i):
+            G.add_edge(i, j)
 
-def geef_alle_namen(ontmoetingen):
-    return set(ontmoetingen)
+    hops_list = {i:hops_nodig_voor_geinfecteerde_populatie(contact_tracing_datastructuur, [i]) for i in geef_alle_namen(contact_tracing_datastructuur)}
+    hops = min([i for i in hops_list.values() if i!=-1]) if len(hops_list)!=0 else -1
+    superverspreiders = set([persoon for persoon, hop in hops_list.items() if hop==hops])
 
-def heeft_contact_gehad_met(ontmoetingen, persoon_X, persoon_Y, afstand=-1):
-    if persoon_X == persoon_Y:
-        return True
-    if not is_lid_van_populatie(ontmoetingen, persoon_X) or not is_lid_van_populatie(ontmoetingen, persoon_Y) or persoon_Y not in ontmoetingen[persoon_X]:
-        return False
-    return ontmoetingen[persoon_X][persoon_Y]<=afstand if afstand!=-1 else True
+    color_map_1 = []
+    for i in G:
+        if i in superverspreiders:
+            color_map_1.append('red')
+        elif hops_list[i] >= hops-1: 
+            color_map_1.append('green')
+        else:
+            color_map_1.append('orange')
 
-def kan_iedereen_rechtstreeks_besmetten(ontmoetingen, geinfecteerd_by_start):
-    return set(geinfecteerd_by_start).union(*[set(geef_rechtstreekse_contacten(ontmoetingen, i)) for i in set(geinfecteerd_by_start) & geef_alle_namen(ontmoetingen)]) == (geef_alle_namen(ontmoetingen) | set(geinfecteerd_by_start))
+    nx.draw(G, node_color=color_map_1, with_labels=True, node_size=[(2.3**abs(hops_list[i]-max(hops_list.values()))) * 200 for i in G], style='dashdot')
+    plt.savefig('foo.png')
 
-def hops_nodig_voor_geinfecteerde_populatie(ontmoetingen, geinfecteerd):
-    hops = 0
-    while geinfecteerd != (geinfecteerd:=set(geinfecteerd).union(*[set(geef_rechtstreekse_contacten(ontmoetingen, i)) for i in set(geinfecteerd) & geef_alle_namen(ontmoetingen)])):
-        if geinfecteerd == geef_alle_namen(ontmoetingen):
-            return hops
-        hops += 1
-    return -1
-
-def hops_nodig_voor_volledig_geinfecteerde_populatie(ontmoetingen):
-    hops_dic = {i:hops for i in geef_alle_namen(ontmoetingen) if (hops:=hops_nodig_voor_geinfecteerde_populatie(ontmoetingen, [i]))!=-1}
-    return (min_hops:=(min(hops_dic.values()) if len(hops_dic)!=0 else -1), set([persoon for persoon, hop in hops_dic.items() if hop==min_hops]))
-
-def lengteUpdater(ontmoetingen, personen):
-    def kortste_lengte(ontmoetingen, persoon_X, persoon_Y):
-        def kortste_pad_vinder(ontmoetingen, persoon_X, persoon_Y, pad=[], lengte=-1):
-            pad = pad + [persoon_X]
-            if persoon_X == persoon_Y:
-                return pad
-            kortste_pad = []
-            for i in geef_rechtstreekse_contacten(ontmoetingen, persoon_X):
-                if i not in pad and (lengte==-1 or len(pad)<(lengte-1)):
-                    nieuw_pad = kortste_pad_vinder(ontmoetingen, i, persoon_Y, pad, lengte)
-                    if nieuw_pad!=[] and (kortste_pad==[] or len(nieuw_pad) < len(kortste_pad)):
-                        kortste_pad, lengte = nieuw_pad, len(nieuw_pad)
-            return kortste_pad
-        kortste_pad = kortste_pad_vinder(ontmoetingen, persoon_X, persoon_Y)
-        return False if kortste_pad == [] else len(kortste_pad)-2
-    for i in personen:
-        for j in (geef_alle_namen(ontmoetingen) - set(personen)):
-            if (x:=kortste_lengte(ontmoetingen, i, j)) != False:
-                ontmoetingen[i][j] = ontmoetingen[j][i] = x
+main()
